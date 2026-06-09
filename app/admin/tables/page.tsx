@@ -152,11 +152,14 @@ function TableCard({
 }) {
   const [qr, setQr] = useState<string>("");
   const [downloading, setDownloading] = useState(false);
+  // QR codes get PRINTED — always point them at the stable public domain, NOT the host the owner
+  // happens to view admin from (a preview/protected URL or www would make a scanned QR fail to load).
+  const PUBLIC_BASE = "https://qrstoremate.com";
 
   useEffect(() => {
     if (!slug) return;
     let alive = true;
-    QRCode.toDataURL(`${window.location.origin}/r/${slug}/t/${table.no}`, {
+    QRCode.toDataURL(`${PUBLIC_BASE}/r/${slug}/t/${table.no}`, {
       width: 320,
       margin: 1,
       color: { dark: color, light: "#FFFFFF" },
@@ -174,7 +177,7 @@ function TableCard({
     if (!slug || downloading) return; // guard against double-clicks while rendering
     setDownloading(true);
     try {
-      const dataUrl = await QRCode.toDataURL(`${window.location.origin}/r/${slug}/t/${table.no}`, {
+      const dataUrl = await QRCode.toDataURL(`${PUBLIC_BASE}/r/${slug}/t/${table.no}`, {
         width: 600,
         margin: 1,
         color: { dark: color, light: "#FFFFFF" },
