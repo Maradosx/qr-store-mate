@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useShop } from "@/lib/shop";
 import { useI18n } from "@/lib/i18n";
-import { fetchReviews, type Review } from "@/lib/db";
+import { fetchReviews, adminDeleteReview, type Review } from "@/lib/db";
 import { Card, PageTitle } from "@/components/admin/ui";
 
 function Stars({ n }: { n: number }) {
@@ -21,7 +21,11 @@ export default function ReviewsPage() {
   const L = (th: string, en: string) => (lang === "th" ? th : en);
   const restaurantId = useShop((s) => s.restaurantId);
   const profile = useShop((s) => s.profile);
+  const isPlatformAdmin = useShop((s) => s.isPlatformAdmin);
+  const slug = useShop((s) => s.slug);
+  const refreshProfile = useShop((s) => s.refreshProfile);
   const [reviews, setReviews] = useState<Review[] | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!restaurantId) return;
@@ -33,6 +37,22 @@ export default function ReviewsPage() {
     void load();
   }, [load]);
 
+  // platform admin only: remove an individual review (any shop) — server re-checks + recomputes rating
+  const del = async (id: string) => {
+    if (deleting) return;
+    if (!window.confirm(L("ลบรีวิวนี้ถาวร? คะแนนเฉลี่ยของร้านจะถูกคำนวณใหม่", "Delete this review permanently? The shop's average rating will be recomputed."))) return;
+    setDeleting(id);
+    try {
+      await adminDeleteReview(id);
+      setReviews((rs) => (rs ? rs.filter((r) => r.id !== id) : rs));
+      if (slug) void refreshProfile(slug); // refresh the average + count shown above
+    } catch {
+      window.alert(L("ลบไม่สำเร็จ ลองใหม่อีกครั้ง", "Couldn't delete — try again"));
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   const count = profile.reviews ?? 0;
 
   return (
@@ -41,6 +61,12 @@ export default function ReviewsPage() {
         title={L("รีวิวจากลูกค้า", "Customer reviews")}
         subtitle={L("อ่านความเห็นจริงจากลูกค้า เพื่อนำไปปรับปรุงร้าน", "Real customer feedback to help you improve")}
       />
+
+      {isPlatformAdmin && (
+        <div className="mb-4 flex items-center gap-2 rounded-2xl bg-ink px-4 py-2.5 text-sm font-semibold text-white">
+          🛡️ {L("โหมดผู้ดูแลระบบ — กดถังขยะเพื่อลบรีวิวที่ไม่เหมาะสมของร้านนี้ได้", "Admin mode — tap the trash icon to remove an inappropriate review from this shop")}
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap gap-3">
         <div className="rounded-2xl bg-teal px-5 py-3 text-white shadow-card">
@@ -69,12 +95,25 @@ export default function ReviewsPage() {
         <div className="space-y-2.5">
           {reviews.map((r) => (
             <Card key={r.id} className="!p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <Stars n={r.rating} />
-                <span className="text-xs text-muted">
-                  {r.table_no ? `${L("โต๊ะ", "Table")} ${r.table_no} · ` : ""}
-                  {new Date(r.created_at).toLocaleDateString(lang === "th" ? "th-TH" : "en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted">
+                    {r.table_no ? `${L("โต๊ะ", "Table")} ${r.table_no} · ` : ""}
+                    {new Date(r.created_at).toLocaleDateString(lang === "th" ? "th-TH" : "en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                  </span>
+                  {isPlatformAdmin && (
+                    <button
+                      onClick={() => del(r.id)}
+                      disabled={deleting === r.id}
+                      aria-label={L("ลบรีวิว", "Delete review")}
+                      title={L("ลบรีวิว", "Delete review")}
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-coral/10 text-base text-[#b23a1e] ring-1 ring-coral/30 active:scale-90 disabled:opacity-50"
+                    >
+                      {deleting === r.id ? "…" : "🗑"}
+                    </button>
+                  )}
+                </div>
               </div>
               {r.comment && <p className="mt-2 text-sm">{r.comment}</p>}
             </Card>

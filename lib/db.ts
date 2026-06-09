@@ -495,6 +495,12 @@ export async function fetchReviews(restaurantId: string): Promise<Review[]> {
   return (data ?? []) as Review[];
 }
 
+/** Platform admin only: delete a single review of any shop (server re-checks is_platform_admin + recomputes the rating). */
+export async function adminDeleteReview(reviewId: string): Promise<void> {
+  const { error } = await supabase.rpc("admin_delete_review", { p_review: reviewId });
+  if (error) throw error;
+}
+
 export type CallReason = "service" | "bill";
 export type PayMethod = "promptpay" | "bank" | "copay" | "cash";
 export type ServiceCall = { id: string; table_no: string; reason: CallReason; pay_method: PayMethod | null; created_at: string };
