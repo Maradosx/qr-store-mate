@@ -67,7 +67,7 @@ export function BillScreen({ slug, table }: { slug: string; table: string }) {
     if (!restaurantId || calling || called) return;
     setCalling(true);
     try {
-      await callStaff(restaurantId, table, "bill"); // distinct "call for the bill" alert on the admin side
+      await callStaff(restaurantId, table, "bill", activeMethod); // tell staff WHICH way they'll pay
       setCalled(true);
       window.setTimeout(() => setCalled(false), 8000);
     } catch {

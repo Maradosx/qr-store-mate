@@ -6,6 +6,7 @@ import { useCaps } from "@/lib/plan";
 import type { OrderStatus } from "@/lib/mock";
 import { PageTitle } from "@/components/admin/ui";
 import { UpgradeCard } from "@/components/admin/UpgradeCard";
+import { BillCallsBar } from "@/components/admin/BillCallsBar";
 
 export default function KitchenPage() {
   const { lang, tr, t } = useI18n();
@@ -37,6 +38,8 @@ export default function KitchenPage() {
         title={L("จอครัว", "Kitchen Display")}
         subtitle={L(`${active.length} ออเดอร์ที่ต้องทำ • อัปเดตสด`, `${active.length} tickets to cook • live`)}
       />
+
+      {caps.kitchen && <BillCallsBar />}
 
       {!caps.kitchen ? (
         <UpgradeCard title={{ th: "จอครัว (Kitchen Display)", en: "Kitchen Display" }} need="Pro" />

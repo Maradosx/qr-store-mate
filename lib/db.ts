@@ -496,23 +496,29 @@ export async function fetchReviews(restaurantId: string): Promise<Review[]> {
 }
 
 export type CallReason = "service" | "bill";
+export type PayMethod = "promptpay" | "bank" | "copay" | "cash";
+export type ServiceCall = { id: string; table_no: string; reason: CallReason; pay_method: PayMethod | null; created_at: string };
 
-/** Customer (anon): raise a "call staff" (service) or "call for the bill" (bill) request for a table. */
-export async function callStaff(restaurantId: string, table: string, reason: CallReason = "service"): Promise<void> {
-  const { error } = await supabase.rpc("call_staff", { p_restaurant: restaurantId, p_table: table, p_reason: reason });
+// how a "call for the bill" payment method reads in each language (for the admin views)
+export const payMethodTH: Record<PayMethod, string> = { promptpay: "พร้อมเพย์", bank: "โอน/สแกน QR", copay: "คนละครึ่ง", cash: "เงินสด" };
+export const payMethodEN: Record<PayMethod, string> = { promptpay: "PromptPay", bank: "Bank / QR", copay: "Co-pay", cash: "Cash" };
+
+/** Customer (anon): raise a "call staff" (service) or "call for the bill" (bill, w/ intended pay method). */
+export async function callStaff(restaurantId: string, table: string, reason: CallReason = "service", payMethod?: PayMethod | null): Promise<void> {
+  const { error } = await supabase.rpc("call_staff", { p_restaurant: restaurantId, p_table: table, p_reason: reason, p_pay_method: payMethod ?? null });
   if (error) throw error;
 }
 
 /** Owner/admin: open (unresolved) service calls for the shop. */
-export async function fetchServiceCalls(restaurantId: string): Promise<{ id: string; table_no: string; reason: CallReason; created_at: string }[]> {
+export async function fetchServiceCalls(restaurantId: string): Promise<ServiceCall[]> {
   const { data, error } = await supabase
     .from("service_calls")
-    .select("id, table_no, reason, created_at")
+    .select("id, table_no, reason, pay_method, created_at")
     .eq("restaurant_id", restaurantId)
     .eq("resolved", false)
     .order("created_at");
   if (error) throw error; // surface failures so callers can tell "no calls" from "fetch failed" (no phantom chime)
-  return (data ?? []) as { id: string; table_no: string; reason: CallReason; created_at: string }[];
+  return (data ?? []) as ServiceCall[];
 }
 
 /** Owner/admin: clear a table's open service calls. */

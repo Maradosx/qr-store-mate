@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useShop } from "@/lib/shop";
 import { useI18n } from "@/lib/i18n";
 import type { OrderStatus, ShopOrder } from "@/lib/mock";
-import { fetchServiceCalls, resolveTableCalls } from "@/lib/db";
+import { fetchServiceCalls, resolveTableCalls, payMethodTH, payMethodEN, type CallReason, type PayMethod } from "@/lib/db";
 import { subscribeCalls } from "@/lib/realtime";
 import { baht } from "@/lib/format";
 import { PageTitle } from "@/components/admin/ui";
@@ -58,7 +58,7 @@ export default function FloorPage() {
   const unpayTableBill = useShop((s) => s.unpayTableBill);
   const restaurantId = useShop((s) => s.restaurantId);
   const [sel, setSel] = useState<string | null>(null);
-  const [calls, setCalls] = useState<Map<string, "service" | "bill">>(new Map());
+  const [calls, setCalls] = useState<Map<string, { reason: CallReason; method: PayMethod | null }>>(new Map());
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false); // guards pay/unpay against double-clicks
 
@@ -66,8 +66,8 @@ export default function FloorPage() {
     if (!restaurantId) return;
     try {
       const rows = await fetchServiceCalls(restaurantId);
-      const m = new Map<string, "service" | "bill">();
-      for (const r of rows) if (r.reason === "bill" || !m.has(r.table_no)) m.set(r.table_no, r.reason); // bill wins the table badge
+      const m = new Map<string, { reason: CallReason; method: PayMethod | null }>();
+      for (const r of rows) if (r.reason === "bill" || !m.has(r.table_no)) m.set(r.table_no, { reason: r.reason, method: r.pay_method }); // bill wins the table badge
       setCalls(m);
     } catch {
       /* transient failure — keep current calls, don't flicker the rings */
@@ -155,8 +155,10 @@ export default function FloorPage() {
             const open = openOf(t.no);
             const tone = toneOf(open);
             const total = open.reduce((s, o) => s + o.total, 0);
-            const callReason = calls.get(t.no);
-            const hasCall = !!callReason;
+            const call = calls.get(t.no);
+            const callReason = call?.reason;
+            const hasCall = !!call;
+            const callMethod = call?.method ? (lang === "th" ? payMethodTH[call.method] : payMethodEN[call.method]) : null;
             return (
               <button
                 key={t.id}
@@ -180,7 +182,7 @@ export default function FloorPage() {
                 </div>
                 <span className="mt-2 flex items-center gap-1.5 text-[11px] font-bold">
                   {hasCall ? (
-                    callReason === "bill" ? L("💰 เรียกเก็บเงิน", "💰 Bill, please") : L("🔔 เรียกพนักงาน", "🔔 Called")
+                    callReason === "bill" ? `💰 ${L("เรียกเก็บเงิน", "Bill")}${callMethod ? ` · ${callMethod}` : ""}` : L("🔔 เรียกพนักงาน", "🔔 Called")
                   ) : (
                     <>
                       <span className={`h-2 w-2 shrink-0 rounded-full ${TONE[tone].dot}`} />
@@ -208,7 +210,9 @@ export default function FloorPage() {
             {calls.has(sel) && (
               <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-coral/15 px-4 py-3 ring-1 ring-coral/40">
                 <span className="text-sm font-bold text-[#b23a1e]">
-                  {calls.get(sel) === "bill" ? `💰 ${L("ลูกค้าขอเก็บเงิน (จ่ายแล้ว/พร้อมจ่าย)", "Customer is asking for the bill")}` : `🔔 ${L("ลูกค้าเรียกพนักงาน", "Customer is calling staff")}`}
+                  {calls.get(sel)!.reason === "bill"
+                    ? `💰 ${L("ลูกค้าขอเก็บเงิน", "Customer is asking for the bill")}${calls.get(sel)!.method ? ` · ${lang === "th" ? payMethodTH[calls.get(sel)!.method!] : payMethodEN[calls.get(sel)!.method!]}` : ""}`
+                    : `🔔 ${L("ลูกค้าเรียกพนักงาน", "Customer is calling staff")}`}
                 </span>
                 <button
                   onClick={async () => {
@@ -230,7 +234,7 @@ export default function FloorPage() {
                     disabled={busy}
                     onClick={async () => {
                       if (busy) return;
-                      if (window.confirm(L("ยกเลิกการจ่ายล่าสุดและคืนบิลโต๊ะนี้?", "Undo the last payment and reopen this table's bill?"))) {
+                      if (window.confirm(L("คืนบิล: เปิดรายการที่จ่ายล่าสุดของโต๊ะนี้กลับมา?", "Reopen this table's most recent payment?"))) {
                         setBusy(true);
                         const ok = await unpayTableBill(sel);
                         setBusy(false);

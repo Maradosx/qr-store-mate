@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useShop } from "@/lib/shop";
 import { useI18n } from "@/lib/i18n";
-import { fetchServiceCalls } from "@/lib/db";
+import { fetchServiceCalls, payMethodTH, payMethodEN, type CallReason, type PayMethod } from "@/lib/db";
 import { subscribeCalls } from "@/lib/realtime";
 import { unlockVoiceAudio, preloadVoice, announce } from "@/lib/voice";
 import { BrandLockup, BrandMark } from "@/components/BrandMark";
@@ -538,7 +538,7 @@ function ServiceCallAlerter() {
   const L = (th: string, en: string) => (lang === "th" ? th : en);
   const restaurantId = useShop((s) => s.restaurantId);
   const pathname = usePathname();
-  const [calls, setCalls] = useState<{ table: string; reason: "service" | "bill" }[]>([]);
+  const [calls, setCalls] = useState<{ table: string; reason: CallReason; method: PayMethod | null }[]>([]);
   const seen = useRef<Set<string> | null>(null);
   const lastRid = useRef<string>("");
   const audioRef = useRef<AudioContext | null>(null);
@@ -575,8 +575,8 @@ function ServiceCallAlerter() {
         return; // transient failure: keep the baseline + banner, never wipe → no phantom chime
       }
       if (!alive) return;
-      // one entry per (table, reason) — a table can have both a service call and a bill call
-      const uniq = [...new Map(rows.map((r) => [`${r.table_no}|${r.reason}`, { table: r.table_no, reason: r.reason }])).values()];
+      // one entry per (table, reason) — a table can have both a service call and a bill call; latest row wins
+      const uniq = [...new Map(rows.map((r) => [`${r.table_no}|${r.reason}`, { table: r.table_no, reason: r.reason, method: r.pay_method }])).values()];
       const ids = new Set(uniq.map((c) => `${c.table}|${c.reason}`));
       // (re)baseline on first load / shop switch so we never chime for pre-existing or switched-in calls
       if (seen.current === null || restaurantId !== lastRid.current) {
@@ -587,11 +587,12 @@ function ServiceCallAlerter() {
         seen.current = ids;
         if (fresh.length && useShop.getState().soundOn) {
           const newService = fresh.filter((c) => c.reason === "service").map((c) => c.table);
-          const newBill = fresh.filter((c) => c.reason === "bill").map((c) => c.table);
+          const newBill = fresh.filter((c) => c.reason === "bill");
           if (newService.length) callChime(audioRef.current);
           if (newBill.length) billChime(audioRef.current);
           if (newService.length) void announce("staff", newService);
-          if (newBill.length) void announce("bill", newBill);
+          // bill calls speak the chosen pay method per table: "โต๊ะ X เรียกเก็บเงิน <วิธีจ่าย>"
+          for (const c of newBill) void announce("bill", [c.table], c.method);
         }
       }
       setCalls(uniq);
@@ -608,8 +609,11 @@ function ServiceCallAlerter() {
   }, [restaurantId]);
 
   const serviceT = calls.filter((c) => c.reason === "service").map((c) => c.table);
-  const billT = calls.filter((c) => c.reason === "bill").map((c) => c.table);
-  if (calls.length === 0 || pathname === "/admin/floor") return null;
+  const billC = calls.filter((c) => c.reason === "bill");
+  // floor / orders / kitchen now handle calls in-page (rings + sheet, or the BillCallsBar), so the
+  // app-wide banner steps aside there. The chime + voice still fire everywhere.
+  const handledInPage = pathname === "/admin/floor" || pathname === "/admin/orders" || pathname === "/admin/kitchen";
+  if (calls.length === 0 || handledInPage) return null;
   return (
     <Link
       href="/admin/floor"
@@ -618,7 +622,12 @@ function ServiceCallAlerter() {
     >
       <span className="min-w-0 space-y-0.5 text-sm font-bold">
         {serviceT.length > 0 && <span className="block">🔔 {L("เรียกพนักงาน", "Calling staff")} · {L("โต๊ะ", "Table")} {serviceT.join(", ")}</span>}
-        {billT.length > 0 && <span className="block">💰 {L("เรียกเก็บเงิน", "Bill, please")} · {L("โต๊ะ", "Table")} {billT.join(", ")}</span>}
+        {billC.map((c) => (
+          <span key={c.table} className="block">
+            💰 {L("เรียกเก็บเงิน", "Bill, please")} · {L("โต๊ะ", "Table")} {c.table}
+            {c.method ? ` · ${lang === "th" ? payMethodTH[c.method] : payMethodEN[c.method]}` : ""}
+          </span>
+        ))}
       </span>
       <span className="shrink-0 rounded-full bg-white/20 px-3 py-1 text-xs font-bold ring-1 ring-white/30">
         {L("ไปที่ผังโต๊ะ →", "Go to floor →")}

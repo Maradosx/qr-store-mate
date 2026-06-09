@@ -6,6 +6,7 @@ import { useI18n } from "@/lib/i18n";
 import type { OrderStatus } from "@/lib/mock";
 import { baht } from "@/lib/format";
 import { Card, PageTitle } from "@/components/admin/ui";
+import { BillCallsBar } from "@/components/admin/BillCallsBar";
 
 const META: Record<OrderStatus, { th: string; en: string; cls: string }> = {
   received: { th: "รับออเดอร์", en: "Received", cls: "bg-aqua/15 text-teal-deep" },
@@ -57,6 +58,8 @@ export default function OrdersPage() {
         title={L("ออเดอร์", "Orders")}
         subtitle={L(`กำลังดำเนินการ ${active} ออเดอร์`, `${active} active orders`)}
       />
+
+      <BillCallsBar />
 
       <div className="no-scrollbar mb-4 flex gap-2 overflow-x-auto">
         {filters.map((f) => (

@@ -82,26 +82,28 @@ function getBuffer(key: string): Promise<AudioBuffer | null> {
 export function preloadVoice() {
   if (preloaded) return;
   preloaded = true;
-  const keys = ["table", "staff", "bill", "neworder"];
+  const keys = ["table", "staff", "bill", "neworder", "pm_cash", "pm_promptpay", "pm_bank", "pm_copay"];
   for (let n = 1; n <= 50; n++) keys.push(`n${n}`);
   for (const k of keys) void getBuffer(k);
 }
 
 type Kind = "new" | "staff" | "bill";
+export type VoicePayMethod = "promptpay" | "bank" | "copay" | "cash";
 
-function clipKeysFor(kind: Kind, tables: string[]): string[] {
+function clipKeysFor(kind: Kind, tables: string[], method?: VoicePayMethod | null): string[] {
   const keys = ["table"];
   for (const tb of tables) {
     const n = parseInt(String(tb), 10);
     if (Number.isInteger(n) && n >= 1 && n <= 99) keys.push(`n${n}`);
   }
   keys.push(kind === "new" ? "neworder" : kind); // "staff" | "bill"
+  if (kind === "bill" && method) keys.push(`pm_${method}`); // e.g. "โต๊ะ ห้า เรียกเก็บเงิน เงินสด"
   return keys;
 }
 
-// Speak e.g. "โต๊ะ ห้า เรียกเก็บเงิน" by sequencing the matching clips on the shared context.
+// Speak e.g. "โต๊ะ ห้า เรียกเก็บเงิน เงินสด" by sequencing the matching clips on the shared context.
 // Concurrent calls queue (no overlap). Best-effort & silent on failure.
-export async function announce(kind: Kind, tables: string[]) {
+export async function announce(kind: Kind, tables: string[], method?: VoicePayMethod | null) {
   const c = getCtx();
   if (!c) return;
   try {
@@ -109,7 +111,7 @@ export async function announce(kind: Kind, tables: string[]) {
   } catch {
     /* ignore — same gesture limitation as the chime */
   }
-  const keys = clipKeysFor(kind, tables);
+  const keys = clipKeysFor(kind, tables, method);
   const seq: AudioBuffer[] = [];
   for (const k of keys) {
     const b = await getBuffer(k);
