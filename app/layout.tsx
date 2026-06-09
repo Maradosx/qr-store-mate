@@ -17,7 +17,7 @@ const niramit = Niramit({
   display: "swap",
 });
 
-const SITE_URL = "https://qrstoremate.vercel.app";
+const SITE_URL = "https://qrstoremate.com";
 const TITLE = "QR Store Mate — สั่งง่ายแค่สแกน · Scan to order";
 const DESCRIPTION =
   "ระบบสั่งอาหารผ่าน QR ที่โต๊ะ สำหรับร้านอาหาร · QR table-ordering & PromptPay for restaurants.";
