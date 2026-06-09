@@ -12,6 +12,8 @@ import { LangToggle } from "./LangToggle";
 import { DishImage } from "./DishImage";
 import { AddonSheet } from "./AddonSheet";
 import { OnboardingPopup } from "./OnboardingPopup";
+import { ReviewsSheet } from "./ReviewsSheet";
+import { useOpenState } from "@/lib/hours";
 import { Star, Clock, Plus, QrGlyph, ChevronRight } from "./icons";
 
 export function MenuScreen({ slug, table }: { slug: string; table: string }) {
@@ -36,6 +38,11 @@ export function MenuScreen({ slug, table }: { slug: string; table: string }) {
   const [cat, setCat] = useState<string>("recommended");
   const [open, setOpen] = useState<MenuItem | null>(null);
   const [zoom, setZoom] = useState<string | null>(null); // tap-to-view: logo / cover lightbox
+  const [reviewsOpen, setReviewsOpen] = useState(false);
+  // live open/closed state (owner's switch + opening hours, Asia/Bangkok) — refreshes on the
+  // shop realtime channel + a 30s clock tick so it flips at the boundary
+  const openState = useOpenState(slug);
+  const isOpen = openState.open;
   const lines = useCart((s) => s.lines);
   const count = cartCount(lines);
   const total = cartNow(lines);
@@ -172,26 +179,59 @@ export function MenuScreen({ slug, table }: { slug: string; table: string }) {
           </div>
 
           <div className="mt-3.5 flex flex-wrap items-center gap-2 pb-5">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-teal-deep">
-              <span className="h-2 w-2 rounded-full bg-success" style={{ animation: "pulse-ring 1.8s infinite" }} />
-              {t("common.open")}
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/20">
+            {isOpen ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-teal-deep">
+                <span className="h-2 w-2 rounded-full bg-success" style={{ animation: "pulse-ring 1.8s infinite" }} />
+                {t("common.open")}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-coral px-3 py-1.5 text-xs font-bold text-white shadow">
+                ⏸ {openState.reason === "paused" ? L("ปิดรับออเดอร์", "Not taking orders") : L("ปิดแล้ว", "Closed")}
+              </span>
+            )}
+            {/* tap to read what other customers said */}
+            <button
+              onClick={() => setReviewsOpen(true)}
+              aria-label={L("อ่านรีวิว", "Read reviews")}
+              className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/20 active:scale-95"
+            >
               {profile.reviews > 0 ? (
                 <>
                   <Star size={13} className="text-gold" /> {profile.rating}
                   <span className="text-white/70">({profile.reviews.toLocaleString()})</span>
                 </>
               ) : (
-                <>✨ {t("common.newShop")}</>
+                <>⭐ {L("อ่าน/เขียนรีวิว", "Reviews")}</>
               )}
-            </span>
+              <span className="text-white/70">›</span>
+            </button>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/20">
-              <Clock size={13} /> {profile.hours}
+              <Clock size={13} /> {profile.hours || (profile.openTime && profile.closeTime ? `${profile.openTime}–${profile.closeTime}` : "")}
             </span>
           </div>
         </div>
       </header>
+
+      {/* shop closed → can browse, but ordering is blocked (mirrors the server's place_order guard) */}
+      {!isOpen && (
+        <div className="mx-4 mt-4 flex items-start gap-3 rounded-2xl bg-coral/10 px-4 py-3.5 ring-1 ring-coral/30">
+          <span className="text-xl">{openState.reason === "paused" ? "⏸️" : "🌙"}</span>
+          <div className="min-w-0">
+            <p className="font-display text-sm font-bold text-[#b23a1e]">
+              {openState.reason === "paused"
+                ? L("ร้านปิดรับออเดอร์ชั่วคราว", "Temporarily not taking orders")
+                : L("ขณะนี้อยู่นอกเวลาทำการ", "Outside opening hours right now")}
+            </p>
+            <p className="mt-0.5 text-xs text-ink/70">
+              {openState.reason === "paused"
+                ? L("ดูเมนูได้ แต่ยังสั่งอาหารไม่ได้ตอนนี้", "You can browse the menu, but ordering is paused")
+                : profile.hours || (profile.openTime && profile.closeTime)
+                  ? L(`เปิดบริการ ${profile.hours || `${profile.openTime}–${profile.closeTime}`} น.`, `Open ${profile.hours || `${profile.openTime}–${profile.closeTime}`}`)
+                  : L("กลับมาสั่งได้เมื่อร้านเปิด", "Please come back when the shop is open")}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Signature */}
       <section className="px-5 pt-5">
@@ -205,9 +245,10 @@ export function MenuScreen({ slug, table }: { slug: string; table: string }) {
           {signature.map((m, i) => (
             <button
               key={m.id}
-              onClick={() => setOpen(m)}
+              onClick={() => isOpen && setOpen(m)}
+              disabled={!isOpen}
               style={{ animationDelay: `${i * 60}ms` }}
-              className="anim-rise w-44 shrink-0 overflow-hidden rounded-3xl bg-surface text-left shadow-card ring-1 ring-line"
+              className={`anim-rise w-44 shrink-0 overflow-hidden rounded-3xl bg-surface text-left shadow-card ring-1 ring-line ${isOpen ? "" : "opacity-60"}`}
             >
               <div className="relative">
                 <DishImage tone={m.tone} emoji={m.emoji} img={m.img} emojiSize={52} className="h-28 w-full" />
@@ -247,7 +288,7 @@ export function MenuScreen({ slug, table }: { slug: string; table: string }) {
       {/* Menu list */}
       <section className="space-y-3 px-5 pt-4">
         {list.map((m, i) => (
-          <MenuRow key={m.id} item={m} index={i} onOpen={() => !m.soldout && setOpen(m)} />
+          <MenuRow key={m.id} item={m} index={i} closed={!isOpen} onOpen={() => isOpen && !m.soldout && setOpen(m)} />
         ))}
         {list.length === 0 && (
           <p className="py-8 text-center text-sm text-muted">{t("menu.empty")}</p>
@@ -282,6 +323,14 @@ export function MenuScreen({ slug, table }: { slug: string; table: string }) {
       )}
 
       <AddonSheet item={open} onClose={() => setOpen(null)} />
+      {reviewsOpen && (
+        <ReviewsSheet
+          onClose={() => setReviewsOpen(false)}
+          restaurantId={restaurantId}
+          rating={profile.rating}
+          count={profile.reviews}
+        />
+      )}
       <OnboardingPopup tableKey={`${slug}/${table}`} />
 
       {/* image lightbox — tap the logo or cover to view it full-size */}
@@ -317,24 +366,27 @@ export function MenuScreen({ slug, table }: { slug: string; table: string }) {
 function MenuRow({
   item,
   index,
+  closed,
   onOpen,
 }: {
   item: MenuItem;
   index: number;
+  closed?: boolean;
   onOpen: () => void;
 }) {
   const { t, tr } = useI18n();
   const pct = item.oldPrice
     ? Math.round((1 - item.price / item.oldPrice) * 100)
     : 0;
+  const blocked = item.soldout || !!closed;
 
   return (
     <button
       onClick={onOpen}
-      disabled={item.soldout}
+      disabled={blocked}
       style={{ animationDelay: `${index * 45}ms` }}
       className={`anim-rise flex w-full items-stretch gap-3 rounded-3xl bg-surface p-3 text-left shadow-card ring-1 ring-line ${
-        item.soldout ? "opacity-60" : "active:scale-[.99]"
+        blocked ? "opacity-60" : "active:scale-[.99]"
       } transition`}
     >
       <div className="relative shrink-0">

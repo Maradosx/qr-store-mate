@@ -59,6 +59,9 @@ export type Store = {
   qrColor?: string; // owner-chosen color for table QR codes (default brand teal)
   serviceCharge?: boolean; // add 7% VAT/service to bills (default off — most small shops don't)
   coPay?: boolean; // accept "คนละครึ่ง / ไทยช่วยไทย" gov co-pay — shown as a bill payment option (default off)
+  acceptingOrders?: boolean; // master "open now" switch — off = closed, customers can't order (default on)
+  openTime?: string | null; // "HH:MM" Asia/Bangkok — daily open; null/"" = no time gate (24h)
+  closeTime?: string | null; // "HH:MM" Asia/Bangkok — daily close (close < open = overnight)
   address: string;
   phone: string;
   cover?: string; // uploaded cover photo (data URL)
@@ -71,6 +74,9 @@ export const store: Store = {
   rating: 4.9,
   reviews: 1284,
   hours: "10:00–22:00",
+  acceptingOrders: true,
+  openTime: null,
+  closeTime: null,
   promptpayName: "ครัวคุณนาย จำกัด",
   promptpayId: "081-234-5678",
   address: "123 ถ.สุขุมวิท แขวงคลองเตย กรุงเทพฯ 10110",

@@ -38,6 +38,9 @@ function mapStore(r: Row): Store {
     qrColor: r.qr_color ?? undefined,
     serviceCharge: r.service_charge ?? false,
     coPay: r.accept_co_pay ?? false,
+    acceptingOrders: r.accepting_orders ?? true,
+    openTime: r.open_time ?? null,
+    closeTime: r.close_time ?? null,
     cover: r.cover_url ?? undefined,
     logo: r.logo_url ?? undefined,
   };
@@ -128,7 +131,8 @@ export type ShopData = {
 // columns safe to expose to the public/customer (anon) — excludes owner PII, plan & billing/stripe state
 const PUBLIC_SHOP_COLS =
   "id, slug, status, name_th, name_en, tagline_th, tagline_en, hours, address, phone, rating, reviews, " +
-  "promptpay_name, promptpay_id, bank_name, bank_account, bank_account_name, pay_qr_url, qr_color, service_charge, accept_co_pay, cover_url, logo_url, categories";
+  "promptpay_name, promptpay_id, bank_name, bank_account, bank_account_name, pay_qr_url, qr_color, service_charge, accept_co_pay, " +
+  "accepting_orders, open_time, close_time, cover_url, logo_url, categories";
 // columns the authenticated role may read (public + owner_id/created_at + plan tier). `plan` is read
 // directly (not via RPC) so the owner's tier is STABLE — a get_my_billing blip can no longer fall back to
 // 'starter' and flip the UI. The genuinely sensitive billing/PII (owner_name, owner_phone, trial_ends_at,
@@ -365,6 +369,9 @@ export async function dbUpdateRestaurant(id: string, patch: Partial<Store>) {
   if ("qrColor" in patch) c.qr_color = patch.qrColor || null;
   if (patch.serviceCharge !== undefined) c.service_charge = patch.serviceCharge;
   if (patch.coPay !== undefined) c.accept_co_pay = patch.coPay;
+  if (patch.acceptingOrders !== undefined) c.accepting_orders = patch.acceptingOrders;
+  if ("openTime" in patch) c.open_time = patch.openTime || null;
+  if ("closeTime" in patch) c.close_time = patch.closeTime || null;
   if (Object.keys(c).length) await supabase.from("restaurants").update(c).eq("id", id);
 }
 
@@ -461,6 +468,21 @@ export type Review = { id: string; rating: number; comment: string | null; table
 export async function addReview(restaurantId: string, rating: number, comment: string | null, table: string): Promise<void> {
   const { error } = await supabase.rpc("add_review", { p_restaurant: restaurantId, p_rating: rating, p_comment: comment, p_table: table });
   if (error) throw error;
+}
+
+export type PublicReview = { rating: number; comment: string | null; created_at: string };
+
+/** Customer (anon): read a shop's recent reviews via the public RPC (the table itself is owner/staff-only). */
+export async function fetchPublicReviews(restaurantId: string): Promise<PublicReview[]> {
+  const { data, error } = await supabase.rpc("get_reviews", { p_restaurant: restaurantId });
+  if (error) throw error;
+  return (data ?? []) as PublicReview[];
+}
+
+/** Customer (anon): re-read just the shop's public profile (for live open/closed + info updates). */
+export async function fetchPublicProfile(slug: string): Promise<Store | null> {
+  const { data } = await supabase.from("restaurants").select(PUBLIC_SHOP_COLS).eq("slug", slug).maybeSingle();
+  return data ? mapStore(data as Row) : null;
 }
 
 /** Owner/admin: read the shop's reviews (newest first). */

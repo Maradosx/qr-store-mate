@@ -6,6 +6,7 @@ import QRCode from "qrcode";
 import { useShop } from "@/lib/shop";
 import { useI18n } from "@/lib/i18n";
 import { promptPayPayload, isValidPromptPay } from "@/lib/promptpay";
+import { isShopOpen } from "@/lib/hours";
 import { BrandMark } from "@/components/BrandMark";
 import { Card, PageTitle, Field, UploadButton } from "@/components/admin/ui";
 
@@ -17,6 +18,18 @@ export default function ProfilePage() {
   const logout = useShop((s) => s.logout);
   const slug = useShop((s) => s.slug);
   const previewHref = slug ? `/r/${slug}/t/1` : "/t/1";
+
+  const accepting = profile.acceptingOrders !== false; // undefined → on
+  // re-derive the live status on a 30s tick so the owner's badge flips at the open/close boundary
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
+  const liveOpen = isShopOpen(profile).open;
+  // setting either time also keeps the display `hours` string in sync (so the menu badge matches)
+  const setHours = (open: string | null, close: string | null) =>
+    update({ openTime: open, closeTime: close, hours: open && close ? `${open}–${close}` : "" });
 
   return (
     <div>
@@ -86,7 +99,6 @@ export default function ProfilePage() {
           <Field label={L("ชื่อร้าน (อังกฤษ)", "Name (EN)")} value={profile.name.en} onChange={(v) => update({ name: { ...profile.name, en: v } })} />
           <Field label={L("คำโปรย (ไทย)", "Tagline (TH)")} value={profile.tagline.th} onChange={(v) => update({ tagline: { ...profile.tagline, th: v } })} />
           <Field label={L("คำโปรย (อังกฤษ)", "Tagline (EN)")} value={profile.tagline.en} onChange={(v) => update({ tagline: { ...profile.tagline, en: v } })} />
-          <Field label={L("เวลาเปิด-ปิด", "Opening hours")} value={profile.hours} onChange={(v) => update({ hours: v })} />
           <Field label={L("เบอร์โทร", "Phone")} value={profile.phone} onChange={(v) => update({ phone: v })} />
           <div className="sm:col-span-2">
             <Field label={L("ที่อยู่", "Address")} value={profile.address} onChange={(v) => update({ address: v })} />
@@ -99,6 +111,72 @@ export default function ProfilePage() {
             <Field label={L("เบอร์โทรติดต่อ", "Contact phone")} value={profile.ownerPhone ?? ""} onChange={(v) => update({ ownerPhone: v })} />
           </div>
         </div>
+      </Card>
+
+      {/* Hours & open/close — drives the customer order page in realtime */}
+      <Card className="mb-5">
+        <h2 className="mb-1 font-display text-base font-extrabold">🕒 {L("เวลาทำการ & เปิด-ปิดร้าน", "Hours & open/close")}</h2>
+        <p className="mb-4 text-xs text-muted">
+          {L(
+            "ตั้งเวลาเปิด-ปิด แล้วหน้าสั่งของลูกค้าจะเปิด/ปิดอัตโนมัติตามเวลา — หรือกดสวิตช์ปิดรับออเดอร์เองได้ทันที (ลูกค้าเห็นผลทันที)",
+            "Set your hours and the customer page opens/closes automatically — or flip the switch to stop orders instantly (customers see it live).",
+          )}
+        </p>
+
+        {/* live status for the owner */}
+        <div className={`mb-4 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold ${liveOpen ? "bg-success/15 text-[#0f7a47]" : "bg-coral/15 text-[#b23a1e]"}`}>
+          <span className={`h-2 w-2 rounded-full ${liveOpen ? "bg-success" : "bg-coral"}`} style={liveOpen ? { animation: "pulse-ring 1.8s infinite" } : undefined} />
+          {liveOpen ? L("ตอนนี้: รับออเดอร์อยู่", "Now: accepting orders") : L("ตอนนี้: ปิดรับออเดอร์", "Now: not accepting orders")}
+        </div>
+
+        {/* master switch */}
+        <button
+          onClick={() => update({ acceptingOrders: !accepting })}
+          aria-pressed={accepting}
+          className="flex w-full items-center justify-between gap-3 rounded-2xl bg-bg px-4 py-3.5 text-left ring-1 ring-line active:scale-[.99]"
+        >
+          <span className="min-w-0">
+            <span className="block font-display text-sm font-bold">{L("เปิดรับออเดอร์", "Accept orders")}</span>
+            <span className="block text-xs text-muted">
+              {accepting
+                ? L("ลูกค้าสั่งได้ (ตามเวลาทำการด้านล่าง)", "Customers can order (within hours below)")
+                : L("ปิดรับออเดอร์ — ลูกค้าสั่งไม่ได้", "Closed — customers can't order")}
+            </span>
+          </span>
+          <span className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${accepting ? "bg-success" : "bg-line"}`}>
+            <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${accepting ? "left-[22px]" : "left-0.5"}`} />
+          </span>
+        </button>
+
+        {/* opening hours */}
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-muted">{L("เวลาเปิด", "Open")}</span>
+            <input
+              type="time"
+              value={profile.openTime ?? ""}
+              onChange={(e) => setHours(e.target.value || null, profile.closeTime ?? null)}
+              className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-teal"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-muted">{L("เวลาปิด", "Close")}</span>
+            <input
+              type="time"
+              value={profile.closeTime ?? ""}
+              onChange={(e) => setHours(profile.openTime ?? null, e.target.value || null)}
+              className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-teal"
+            />
+          </label>
+        </div>
+        <p className="mt-2 text-xs text-muted">
+          {profile.openTime && profile.closeTime
+            ? L(`ลูกค้าสั่งได้เฉพาะช่วง ${profile.openTime}–${profile.closeTime} น. — นอกเวลานี้ปิดอัตโนมัติ`, `Customers can order only ${profile.openTime}–${profile.closeTime} — auto-closes outside this.`)
+            : L("ไม่ได้ตั้งเวลา = เปิด 24 ชม. (ควบคุมด้วยสวิตช์ด้านบน)", "No hours set = open 24h (use the switch above).")}
+        </p>
+        {profile.openTime && profile.closeTime && profile.closeTime < profile.openTime && (
+          <p className="mt-1 text-xs font-semibold text-teal-deep">{L("ℹ️ ปิดหลังเที่ยงคืน (ข้ามวัน) — รองรับแล้ว", "ℹ️ Closes after midnight (overnight) — supported")}</p>
+        )}
       </Card>
 
       {/* Payment */}

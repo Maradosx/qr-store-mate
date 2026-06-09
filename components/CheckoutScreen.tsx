@@ -15,6 +15,7 @@ import {
   type CartLine,
 } from "@/lib/cart";
 import { baht } from "@/lib/format";
+import { useOpenState, isShopOpen } from "@/lib/hours";
 import { DishImage } from "./DishImage";
 import { AddonSheet } from "./AddonSheet";
 import { QtyStepper } from "./QtyStepper";
@@ -42,6 +43,12 @@ export function CheckoutScreen({ slug, table }: { slug: string; table: string })
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(false);
   const [editLine, setEditLine] = useState<CartLine | null>(null);
+  // live open/closed (owner switch + hours) — same hook as the menu; the server also enforces this
+  const openState = useOpenState(slug);
+  // `justClosed` covers the ≤tick window where the shop crossed closing time after this screen
+  // rendered: the server rejects the order, and we surface the closed notice instead of a generic error
+  const [justClosed, setJustClosed] = useState(false);
+  const isOpen = openState.open && !justClosed;
 
   const now = cartNow(lines);
   const was = cartWas(lines);
@@ -66,7 +73,7 @@ export function CheckoutScreen({ slug, table }: { slug: string; table: string })
   // ordering only SENDS the items to the kitchen — no payment here. Everyone at the table keeps
   // ordering into one combined bill, and pays once at the end on the table-bill screen.
   const send = async () => {
-    if (busy) return; // guard against double-tap
+    if (busy || !isOpen) return; // guard against double-tap + closed shop (server enforces too)
     setBusy(true);
     setErr(false);
     const no = await placeOrder(table, ""); // payment deferred to the combined bill
@@ -74,7 +81,10 @@ export function CheckoutScreen({ slug, table }: { slug: string; table: string })
       router.push(`/r/${slug}/t/${table}/order`);
     } else {
       setBusy(false);
-      setErr(true); // failed — cart preserved, let them retry
+      // if we just crossed closing time, the server rejected with 'shop closed' — show the closed
+      // notice rather than a misleading "try again"; otherwise it's a real transient failure
+      if (isShopOpen(profile).open) setErr(true);
+      else setJustClosed(true);
     }
   };
 
@@ -172,25 +182,38 @@ export function CheckoutScreen({ slug, table }: { slug: string; table: string })
       {/* send to kitchen */}
       <div className="fixed inset-x-0 bottom-0 z-30">
         <div className="mx-auto max-w-md px-4 pb-4">
-          {err && (
+          {err && isOpen && (
             <p className="mb-2 rounded-xl bg-coral/10 px-3 py-2 text-center text-xs font-semibold text-[#b23a1e]">
               {t("checkout.failed")}
             </p>
           )}
-          <button
-            onClick={send}
-            disabled={busy}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal py-4 font-display text-base font-extrabold text-white shadow-pop transition active:scale-[.99] disabled:opacity-70 disabled:active:scale-100"
-          >
-            {busy ? (
-              <>
-                <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                {t("checkout.placing")}
-              </>
-            ) : (
-              <>👨‍🍳 {L("ส่งเข้าครัว", "Send to kitchen")} • {baht(grand)}</>
-            )}
-          </button>
+          {!isOpen ? (
+            <div className="rounded-2xl bg-coral/10 px-4 py-3.5 text-center ring-1 ring-coral/30">
+              <p className="font-display text-sm font-bold text-[#b23a1e]">
+                {openState.reason === "paused"
+                  ? L("ร้านปิดรับออเดอร์ชั่วคราว", "Temporarily not taking orders")
+                  : L("ขณะนี้อยู่นอกเวลาทำการ", "Outside opening hours right now")}
+              </p>
+              <p className="mt-0.5 text-xs text-ink/70">
+                {L("ยังสั่งไม่ได้ตอนนี้ — รายการในตะกร้ายังอยู่ ค่อยกลับมาสั่งได้", "Can't order right now — your cart is saved for when the shop reopens")}
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={send}
+              disabled={busy}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal py-4 font-display text-base font-extrabold text-white shadow-pop transition active:scale-[.99] disabled:opacity-70 disabled:active:scale-100"
+            >
+              {busy ? (
+                <>
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                  {t("checkout.placing")}
+                </>
+              ) : (
+                <>👨‍🍳 {L("ส่งเข้าครัว", "Send to kitchen")} • {baht(grand)}</>
+              )}
+            </button>
+          )}
         </div>
       </div>
 

@@ -40,6 +40,7 @@ type ShopState = {
   hydrateForViewing: (id: string) => Promise<void>;
   exitViewing: () => Promise<void>;
   refreshOrders: () => Promise<void>;
+  refreshProfile: (slug: string) => Promise<void>; // customer side: re-read public profile (live open/closed)
   refreshPendingCount: () => Promise<void>;
   refreshChatUnread: () => Promise<void>;
 
@@ -194,11 +195,25 @@ export const useShop = create<ShopState>((set, get) => ({
     }
   },
 
+  // customer side: re-pull the public profile (open/closed switch, hours, name/cover) when the
+  // shop channel pings — keeps the menu's open state in sync with what the owner just changed.
+  refreshProfile: async (slug) => {
+    try {
+      const p = await db.fetchPublicProfile(slug);
+      if (p) set({ profile: p });
+    } catch {
+      /* keep current profile on a failed refresh */
+    }
+  },
+
   updateProfile: (patch) => {
     const revert = prevOf(get().profile, patch);
     set((s) => ({ profile: { ...s.profile, ...patch } }));
     const id = get().restaurantId;
-    if (id) void db.dbUpdateRestaurant(id, patch).catch(() => {
+    if (id) void db.dbUpdateRestaurant(id, patch).then(() => {
+      // push open/closed + hours changes to customers' menus in realtime
+      if ("acceptingOrders" in patch || "openTime" in patch || "closeTime" in patch) pingShop(id);
+    }).catch(() => {
       set((s) => ({ profile: { ...s.profile, ...revert } }));
       get().notify("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง");
     });
