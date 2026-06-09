@@ -7,6 +7,7 @@ import { useShop } from "@/lib/shop";
 import { useI18n } from "@/lib/i18n";
 import { fetchServiceCalls } from "@/lib/db";
 import { subscribeCalls } from "@/lib/realtime";
+import { unlockVoiceAudio, preloadVoice, announce } from "@/lib/voice";
 import { BrandLockup, BrandMark } from "@/components/BrandMark";
 import { LangToggle } from "@/components/LangToggle";
 import { Toaster } from "@/components/admin/Toaster";
@@ -406,6 +407,9 @@ function NewOrderAlerter() {
       } catch {
         /* ignore */
       }
+      // also unlock + warm the pre-rendered Thai voice clips on this same tap (iOS)
+      unlockVoiceAudio();
+      preloadVoice();
     };
     window.addEventListener("pointerdown", unlock);
     return () => window.removeEventListener("pointerdown", unlock);
@@ -442,7 +446,7 @@ function NewOrderAlerter() {
       } catch {
         /* ignore */
       }
-      speakTH(`โต๊ะ ${tables} มีออเดอร์ใหม่`);
+      void announce("new", fresh.map((f) => f.table));
     }
     setToast(lang === "th" ? `ออเดอร์ใหม่! โต๊ะ ${tables}` : `New order! Table ${tables}`);
     const timer = window.setTimeout(() => setToast(null), 6000);
@@ -459,24 +463,6 @@ function NewOrderAlerter() {
       🔔 {toast}
     </button>
   );
-}
-
-// speak a short Thai line for hands-free alerts (kitchen/floor) — e.g. "โต๊ะ 3 มีออเดอร์ใหม่".
-// Best-effort: stays silent if the device has no Thai TTS voice / no Web Speech support.
-function speakTH(text: string) {
-  try {
-    const synth = window.speechSynthesis;
-    if (!synth) return;
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "th-TH";
-    u.rate = 1;
-    const th = synth.getVoices().find((v) => v.lang === "th-TH" || v.lang?.toLowerCase().startsWith("th"));
-    if (th) u.voice = th;
-    synth.cancel(); // drop any backlog so alerts stay timely
-    synth.speak(u);
-  } catch {
-    /* no TTS available */
-  }
 }
 
 // header button to mute/unmute all admin alert sounds (beep + chime + Thai voice)
@@ -567,6 +553,9 @@ function ServiceCallAlerter() {
       } catch {
         /* ignore */
       }
+      // also unlock + warm the pre-rendered Thai voice clips on this same tap (iOS)
+      unlockVoiceAudio();
+      preloadVoice();
     };
     window.addEventListener("pointerdown", unlock);
     return () => window.removeEventListener("pointerdown", unlock);
@@ -601,10 +590,8 @@ function ServiceCallAlerter() {
           const newBill = fresh.filter((c) => c.reason === "bill").map((c) => c.table);
           if (newService.length) callChime(audioRef.current);
           if (newBill.length) billChime(audioRef.current);
-          const parts: string[] = [];
-          if (newService.length) parts.push(`โต๊ะ ${newService.join(", ")} เรียกพนักงาน`);
-          if (newBill.length) parts.push(`โต๊ะ ${newBill.join(", ")} เรียกเก็บเงิน`);
-          if (parts.length) speakTH(parts.join(", "));
+          if (newService.length) void announce("staff", newService);
+          if (newBill.length) void announce("bill", newBill);
         }
       }
       setCalls(uniq);
