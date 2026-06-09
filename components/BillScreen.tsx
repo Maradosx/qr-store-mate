@@ -23,7 +23,7 @@ const ST: Record<string, { th: string; en: string; cls: string }> = {
 type PayKey = "promptpay" | "bank" | "copay" | "cash";
 
 export function BillScreen({ slug, table }: { slug: string; table: string }) {
-  const { lang } = useI18n();
+  const { lang, t } = useI18n();
   const L = (th: string, en: string) => (lang === "th" ? th : en);
   const hydrateBySlug = useShop((s) => s.hydrateBySlug);
   const restaurantId = useShop((s) => s.restaurantId);
@@ -120,16 +120,21 @@ export function BillScreen({ slug, table }: { slug: string; table: string }) {
                   <span className={`rounded-full px-3 py-1 text-xs font-bold ${st.cls}`}>{L(st.th, st.en)}</span>
                 </div>
                 <ul className="mt-3 space-y-2 border-t border-dashed border-line pt-3">
-                  {o.items.map((i, idx) => (
-                    <li key={idx} className="flex items-center gap-3">
-                      <DishImage tone={i.tone} emoji={i.emoji} emojiSize={18} className="h-9 w-9 shrink-0 rounded-lg" />
-                      <span className="min-w-0 flex-1 truncate text-sm">
-                        <span className="text-muted">{i.qty}× </span>
-                        {lang === "th" ? i.name_th : i.name_en}
-                      </span>
-                      <span className="text-sm font-semibold text-muted">{baht(i.unit_price * i.qty)}</span>
-                    </li>
-                  ))}
+                  {o.items.map((i, idx) => {
+                    const addonLbl = lang === "th" ? (i.addon_label_th || i.addon_label_en) : (i.addon_label_en || i.addon_label_th);
+                    const extras = [addonLbl || "", i.spice ? t(i.spice as never) : "", i.note ?? ""].filter(Boolean).join(" · ");
+                    return (
+                      <li key={idx} className="flex items-start gap-3">
+                        <DishImage tone={i.tone} emoji={i.emoji} emojiSize={18} className="h-9 w-9 shrink-0 rounded-lg" />
+                        <span className="min-w-0 flex-1 text-sm">
+                          <span className="text-muted">{i.qty}× </span>
+                          {lang === "th" ? i.name_th : i.name_en}
+                          {extras && <span className="mt-0.5 block text-xs font-semibold text-[#b23a1e]">↳ {extras}</span>}
+                        </span>
+                        <span className="shrink-0 text-sm font-semibold text-muted">{baht(i.unit_price * i.qty)}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
                 <div className="mt-2 flex justify-end text-sm font-bold text-teal-deep">{baht(oSub)}</div>
               </div>

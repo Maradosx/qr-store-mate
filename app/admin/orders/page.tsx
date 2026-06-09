@@ -31,7 +31,7 @@ const PREV: Record<OrderStatus, OrderStatus | null> = {
 const ORDER_RANK: Record<OrderStatus, number> = { received: 0, cooking: 1, serving: 2, done: 3, cancelled: 4 };
 
 export default function OrdersPage() {
-  const { lang, tr } = useI18n();
+  const { lang, tr, t } = useI18n();
   const L = (th: string, en: string) => (lang === "th" ? th : en);
   const orders = useShop((s) => s.orders);
   const setStatus = useShop((s) => s.setOrderStatus);
@@ -92,12 +92,18 @@ export default function OrdersPage() {
               <p className="mt-0.5 text-xs text-muted">{o.placedAt}{L(" น.", "")}</p>
 
               <ul className="mt-3 space-y-1 border-t border-dashed border-line pt-3 text-sm">
-                {o.items.map((i, idx) => (
-                  <li key={idx} className="flex justify-between">
-                    <span><span className="text-muted">{i.qty}× </span>{tr(i.name)}</span>
-                    <span className="text-muted">{baht(i.price * i.qty)}</span>
-                  </li>
-                ))}
+                {o.items.map((i, idx) => {
+                  const extras = [i.addonLabel ? tr(i.addonLabel) : "", i.spice ? t(i.spice as never) : "", i.note ?? ""].filter(Boolean).join(" · ");
+                  return (
+                    <li key={idx} className="flex justify-between gap-2">
+                      <span className="min-w-0">
+                        <span className="text-muted">{i.qty}× </span>{tr(i.name)}
+                        {extras && <span className="block text-xs font-semibold text-[#b23a1e]">↳ {extras}</span>}
+                      </span>
+                      <span className="shrink-0 text-muted">{baht(i.price * i.qty)}</span>
+                    </li>
+                  );
+                })}
               </ul>
 
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">

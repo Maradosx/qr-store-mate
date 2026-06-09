@@ -96,6 +96,9 @@ function mapOrder(o: Row): ShopOrder {
       price: i.unit_price,
       emoji: i.emoji ?? "🍽️",
       tone: i.tone ?? "default",
+      addonLabel: i.addon_label_th || i.addon_label_en ? { th: i.addon_label_th ?? "", en: i.addon_label_en ?? "" } : undefined,
+      spice: i.spice ?? null,
+      note: i.note ?? null,
     })),
   };
 }
@@ -495,7 +498,7 @@ export async function resolveTableCalls(restaurantId: string, table: string): Pr
   await supabase.from("service_calls").update({ resolved: true }).eq("restaurant_id", restaurantId).eq("table_no", table).eq("resolved", false);
 }
 
-export type BillItem = { name_th: string; name_en: string; qty: number; unit_price: number; emoji: string; tone: string };
+export type BillItem = { name_th: string; name_en: string; qty: number; unit_price: number; emoji: string; tone: string; addon_label_th?: string | null; addon_label_en?: string | null; spice?: string | null; note?: string | null };
 export type BillOrder = { order_no: string; status: OrderStatus; total: number; placed_at: string; items: BillItem[] };
 export type TableBill = { total: number; count: number; orders: BillOrder[] };
 

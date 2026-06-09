@@ -49,7 +49,7 @@ const waitMinutes = (o: ShopOrder): number => (o.ts ? Math.round((Date.now() - n
 const isOverdue = (o: ShopOrder): boolean => (o.status === "received" || o.status === "cooking") && waitMinutes(o) >= OVERDUE_MIN;
 
 export default function FloorPage() {
-  const { lang, tr } = useI18n();
+  const { lang, tr, t } = useI18n();
   const L = (th: string, en: string) => (lang === "th" ? th : en);
   const tables = useShop((s) => s.tables);
   const orders = useShop((s) => s.orders);
@@ -266,10 +266,16 @@ export default function FloorPage() {
                             <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${SMETA[o.status].cls}`}>{L(SMETA[o.status].th, SMETA[o.status].en)}</span>
                           </div>
                         </div>
-                        <ul className="mt-2 space-y-0.5 text-sm">
-                          {o.items.map((i, idx) => (
-                            <li key={idx} className="text-muted">{i.qty}× {tr(i.name)}</li>
-                          ))}
+                        <ul className="mt-2 space-y-1 text-sm">
+                          {o.items.map((i, idx) => {
+                            const extras = [i.addonLabel ? tr(i.addonLabel) : "", i.spice ? t(i.spice as never) : "", i.note ?? ""].filter(Boolean).join(" · ");
+                            return (
+                              <li key={idx} className="text-muted">
+                                {i.qty}× {tr(i.name)}
+                                {extras && <span className="block pl-4 text-xs font-semibold text-[#b23a1e]">↳ {extras}</span>}
+                              </li>
+                            );
+                          })}
                         </ul>
                         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2">
                           <span className="font-display text-sm font-bold text-teal-deep">{baht(o.total)}</span>

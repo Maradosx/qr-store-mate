@@ -8,7 +8,7 @@ import { PageTitle } from "@/components/admin/ui";
 import { UpgradeCard } from "@/components/admin/UpgradeCard";
 
 export default function KitchenPage() {
-  const { lang, tr } = useI18n();
+  const { lang, tr, t } = useI18n();
   const L = (th: string, en: string) => (lang === "th" ? th : en);
   const caps = useCaps();
   const orders = useShop((s) => s.orders);
@@ -63,14 +63,20 @@ export default function KitchenPage() {
                   <span className="text-sm font-bold opacity-90">{o.no} · {o.placedAt}</span>
                 </div>
                 <ul className="flex-1 space-y-2 px-5 py-4">
-                  {o.items.map((i, idx) => (
-                    <li key={idx} className="flex items-baseline gap-2.5">
-                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-bg font-display text-sm font-extrabold text-teal-deep">
-                        {i.qty}
-                      </span>
-                      <span className="font-display text-lg font-bold leading-snug">{tr(i.name)}</span>
-                    </li>
-                  ))}
+                  {o.items.map((i, idx) => {
+                    const extras = [i.addonLabel ? tr(i.addonLabel) : "", i.spice ? t(i.spice as never) : "", i.note ?? ""].filter(Boolean).join(" · ");
+                    return (
+                      <li key={idx} className="flex items-baseline gap-2.5">
+                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-bg font-display text-sm font-extrabold text-teal-deep">
+                          {i.qty}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="font-display text-lg font-bold leading-snug">{tr(i.name)}</span>
+                          {extras && <span className="mt-0.5 block text-sm font-bold leading-snug text-[#b23a1e]">↳ {extras}</span>}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
                 {/* current stage label so it's clear what state the ticket is in */}
                 <p className="px-5 pb-1 text-xs font-bold text-muted">

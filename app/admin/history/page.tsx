@@ -47,7 +47,7 @@ export default function HistoryPage() {
     const head = ["order_no", "table", "date", "time", "status", "total", "items"];
     const rows = filtered.map((o) => [
       o.no, o.table, o.date, o.placedAt, o.status, String(o.total),
-      o.items.map((i) => `${i.qty}x ${i.name.th}`).join(" / "),
+      o.items.map((i) => `${i.qty}x ${i.name.th}${i.addonLabel?.th ? ` (${i.addonLabel.th})` : ""}${i.note ? ` [${i.note}]` : ""}`).join(" / "),
     ]);
     const csv = "﻿" + [head, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -141,7 +141,7 @@ export default function HistoryPage() {
               <span className="font-display font-extrabold text-teal-deep">{baht(o.total)}</span>
             </div>
             <p className="mt-2 text-sm text-muted">
-              {o.items.map((i) => `${i.qty}× ${tr(i.name)}`).join("  ·  ")}
+              {o.items.map((i) => `${i.qty}× ${tr(i.name)}${i.addonLabel || i.note ? ` (${[i.addonLabel ? tr(i.addonLabel) : "", i.note ?? ""].filter(Boolean).join(", ")})` : ""}`).join("  ·  ")}
             </p>
           </Card>
         ))}

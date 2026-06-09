@@ -255,7 +255,16 @@ export const menuById = (id: string) => menu.find((m) => m.id === id);
 // ---- Orders (seed for admin board / history / dashboard) ----
 export type OrderStatus = "received" | "cooking" | "serving" | "done" | "cancelled";
 
-export type ShopOrderItem = { name: TL; qty: number; price: number; emoji: string; tone: string };
+export type ShopOrderItem = {
+  name: TL;
+  qty: number;
+  price: number;
+  emoji: string;
+  tone: string;
+  addonLabel?: TL; // chosen add-ons (e.g. "เพิ่มไข่ดาว, พิเศษ")
+  spice?: string | null; // spice level key (e.g. "spice.medium")
+  note?: string | null; // free-text note to the kitchen
+};
 export type ShopOrder = {
   id?: string;
   no: string;
