@@ -205,7 +205,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </header>
 
       {/* Topbar (desktop) */}
-      <div className="sticky top-0 z-20 hidden items-center justify-end gap-3 border-b border-line bg-bg/80 px-8 py-3 backdrop-blur md:flex md:pl-[16rem]">
+      <div className="sticky top-0 z-20 hidden items-center justify-end gap-3 border-b border-line bg-bg/80 px-8 py-3 backdrop-blur md:flex md:ml-[16rem]">
         <LangToggle />
         {restaurantId && <SoundToggle />}
         <Link href={custHref} className="rounded-full bg-teal px-4 py-2 text-sm font-bold text-white shadow-card">
