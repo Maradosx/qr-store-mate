@@ -146,10 +146,15 @@ async function loadShop(rest: Row, role: MemberRole = "owner", publicOnly = fals
     .select("*, addon_groups(*, addon_options(*))")
     .eq("restaurant_id", restaurantId);
   if (publicOnly) itemsQuery = itemsQuery.eq("hidden", false); // never ship hidden/draft items to customers
-  const [{ data: items }, { data: tbls }] = await Promise.all([
+  const [itemsRes, tblsRes] = await Promise.all([
     itemsQuery.order("sort"),
     supabase.from("tables").select("*").eq("restaurant_id", restaurantId).order("no"),
   ]);
+  // a failed sub-query must FAIL the load (caller shows a retry screen) — swallowing it caches an
+  // empty menu under loadedKey and the customer sees a blank shop until they fully re-navigate
+  if (itemsRes.error) throw itemsRes.error;
+  if (tblsRes.error) throw tblsRes.error;
+  const items = itemsRes.data, tbls = tblsRes.data;
   // customers never need the order history (it's owner/staff-only) — skip the wasted fetch on the public path
   let ords: Row[] = [];
   if (!publicOnly) {
@@ -340,11 +345,18 @@ export async function signUpOwner(
 }
 
 export async function fetchOrders(restaurantId: string): Promise<ShopOrder[]> {
-  const { data } = await supabase
+  // bounded: unpaid/open orders are always included; closed history is windowed to 30 days
+  // (capped at 1000 rows) so a busy shop's full history doesn't ride along on every realtime
+  // refresh + 30s poll — this was an unbounded-egress time bomb. Older history: CSV/export later.
+  const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+  const { data, error } = await supabase
     .from("orders")
     .select("*, order_items(*)")
     .eq("restaurant_id", restaurantId)
-    .order("placed_at", { ascending: false });
+    .or(`paid_at.is.null,placed_at.gte.${since}`)
+    .order("placed_at", { ascending: false })
+    .limit(1000);
+  if (error) throw error; // surface failures — callers keep their current board instead of blanking it
   return (data ?? []).map(mapOrder);
 }
 
@@ -372,7 +384,11 @@ export async function dbUpdateRestaurant(id: string, patch: Partial<Store>) {
   if (patch.acceptingOrders !== undefined) c.accepting_orders = patch.acceptingOrders;
   if ("openTime" in patch) c.open_time = patch.openTime || null;
   if ("closeTime" in patch) c.close_time = patch.closeTime || null;
-  if (Object.keys(c).length) await supabase.from("restaurants").update(c).eq("id", id);
+  if (Object.keys(c).length) {
+    // supabase-js never rejects — must check error explicitly or callers' rollbacks are dead code
+    const { error } = await supabase.from("restaurants").update(c).eq("id", id);
+    if (error) throw error;
+  }
 }
 
 export async function dbUpdateMenuItem(id: string, patch: Partial<MenuItem>) {
@@ -389,7 +405,10 @@ export async function dbUpdateMenuItem(id: string, patch: Partial<MenuItem>) {
   if (patch.bestseller !== undefined) c.bestseller = patch.bestseller;
   if (patch.spicy !== undefined) c.spicy = patch.spicy;
   if (patch.emoji !== undefined) c.emoji = patch.emoji;
-  if (Object.keys(c).length) await supabase.from("menu_items").update(c).eq("id", id);
+  if (Object.keys(c).length) {
+    const { error } = await supabase.from("menu_items").update(c).eq("id", id);
+    if (error) throw error;
+  }
 }
 
 /** Owner/admin: replace ALL add-on groups (+options) for a menu item (atomic, server-authorized). */
@@ -427,7 +446,8 @@ export async function dbAddMenuItem(restaurantId: string, cat: string): Promise<
 }
 
 export async function dbRemoveMenuItem(id: string) {
-  await supabase.from("menu_items").delete().eq("id", id);
+  const { error } = await supabase.from("menu_items").delete().eq("id", id);
+  if (error) throw error;
 }
 
 /** Save the shop's category list (jsonb on restaurants). */
@@ -447,12 +467,14 @@ export async function dbAddTable(restaurantId: string, no: string): Promise<{ id
 }
 
 export async function dbRemoveTable(id: string) {
-  await supabase.from("tables").delete().eq("id", id);
+  const { error } = await supabase.from("tables").delete().eq("id", id);
+  if (error) throw error;
 }
 
 export async function dbSetOrderStatus(restaurantId: string, orderId: string, status: OrderStatus) {
   // scope by restaurant_id too (defense-in-depth alongside RLS) so an order id alone can't touch another shop
-  await supabase.from("orders").update({ status }).eq("restaurant_id", restaurantId).eq("id", orderId);
+  const { error } = await supabase.from("orders").update({ status }).eq("restaurant_id", restaurantId).eq("id", orderId);
+  if (error) throw error;
 }
 
 /** Customer-side: read just this order's live status (anon-safe via RPC; needs restaurant id + order no). */
@@ -479,9 +501,19 @@ export async function fetchPublicReviews(restaurantId: string): Promise<PublicRe
   return (data ?? []) as PublicReview[];
 }
 
-/** Customer (anon): re-read just the shop's public profile (for live open/closed + info updates). */
+// LIGHT variant for the live refresh path: everything EXCEPT the base64 images (cover_url,
+// logo_url, pay_qr_url ≈ 1MB+). The 60s self-heal poll + every realtime ping re-fetch the
+// profile — shipping the images each time was burning ~63MB/hour per open menu tab of the
+// 5GB/month Supabase egress quota. Images load once via fetchShopBySlug and are merged back.
+const LIGHT_SHOP_COLS =
+  "id, slug, status, name_th, name_en, tagline_th, tagline_en, hours, address, phone, rating, reviews, " +
+  "promptpay_name, promptpay_id, bank_name, bank_account, bank_account_name, qr_color, service_charge, accept_co_pay, " +
+  "accepting_orders, open_time, close_time, categories";
+
+/** Customer (anon): re-read the shop's public profile WITHOUT images (live open/closed + info updates). */
 export async function fetchPublicProfile(slug: string): Promise<Store | null> {
-  const { data } = await supabase.from("restaurants").select(PUBLIC_SHOP_COLS).eq("slug", slug).maybeSingle();
+  const { data, error } = await supabase.from("restaurants").select(LIGHT_SHOP_COLS).eq("slug", slug).maybeSingle();
+  if (error) return null; // transient — caller keeps the current profile
   return data ? mapStore(data as Row) : null;
 }
 

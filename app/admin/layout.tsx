@@ -108,6 +108,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => clearInterval(id);
   }, [authed, restaurantId, refreshOrders]);
 
+  // the customer+admin views share ONE zustand store: opening "ดูหน้าลูกค้า" loads the PUBLIC
+  // shop data (no orders, plan fail-closed to starter) over the admin context. Coming back to
+  // any /admin page with that customer payload still loaded would show an empty board + locked
+  // features — reload the owner context whenever we detect it.
+  const loadedKey = useShop((s) => s.loadedKey);
+  const hydrateForOwner = useShop((s) => s.hydrateForOwner);
+  useEffect(() => {
+    if (authed && loadedKey?.startsWith("slug:")) void hydrateForOwner();
+  }, [authed, loadedKey, hydrateForOwner]);
+
   if (!authed) return <LoginGate />;
 
   if (!loaded)
@@ -396,6 +406,7 @@ function NewOrderAlerter() {
   const lastRid = useRef<string>("");
   const audioRef = useRef<AudioContext | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<number | null>(null);
 
   // unlock + reuse a WebAudio context on the first user interaction (autoplay policy)
   useEffect(() => {
@@ -449,9 +460,17 @@ function NewOrderAlerter() {
       void announce("new", fresh.map((f) => f.table));
     }
     setToast(lang === "th" ? `ออเดอร์ใหม่! โต๊ะ ${tables}` : `New order! Table ${tables}`);
-    const timer = window.setTimeout(() => setToast(null), 6000);
-    return () => clearTimeout(timer);
+    // dismiss timer lives in a ref, NOT the effect cleanup: place_order fires INSERT+UPDATE
+    // back-to-back, so the effect re-runs immediately and a cleanup-scoped timer would be
+    // cleared before it fires — leaving the toast stuck on screen until manually tapped.
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 6000);
   }, [orders, restaurantId, lang]);
+
+  // clear the dismiss timer only on unmount
+  useEffect(() => () => {
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+  }, []);
 
   if (!toast) return null;
   return (

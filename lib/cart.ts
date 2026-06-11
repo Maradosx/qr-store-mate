@@ -35,6 +35,7 @@ type CartState = {
   lines: CartLine[];
   lastOrder: CartOrder | null;
   ctx: string | null; // "slug/table" the current cart belongs to
+  lastPlaceError: string | null; // server reason of the last failed placeOrder (e.g. "item not available")
   ensureCtx: (key: string) => void;
   add: (line: Omit<CartLine, "qty">, qty: number) => void;
   replace: (oldKey: string, line: Omit<CartLine, "qty">, qty: number) => void;
@@ -50,9 +51,19 @@ export const useCart = create<CartState>()(
   lines: [],
   lastOrder: null,
   ctx: null,
-  // reset the cart (and any previous success order) when it now belongs to a different restaurant/table
+  lastPlaceError: null,
+  // reset the cart (and any previous success order) when it now belongs to a different restaurant/table.
+  // HYDRATION GUARD: this is called from page effects which run BEFORE Providers' rehydrate()
+  // (React fires child effects first). Reconciling against the un-hydrated default (ctx=null)
+  // would always "mismatch" and — because persist writes every setState — overwrite the saved
+  // cart in localStorage with an empty one on EVERY hard load. So hydrate first, then reconcile
+  // against the real persisted state.
   ensureCtx: (key) => {
-    if (get().ctx !== key) set({ lines: [], lastOrder: null, ctx: key });
+    const reconcile = () => {
+      if (get().ctx !== key) set({ lines: [], lastOrder: null, ctx: key });
+    };
+    if (useCart.persist.hasHydrated()) reconcile();
+    else void Promise.resolve(useCart.persist.rehydrate()).then(reconcile);
   },
   add: (line, qty) =>
     set((s) => {
@@ -118,8 +129,10 @@ export const useCart = create<CartState>()(
     try {
       // server recomputes total, generates a unique order_no, inserts atomically
       no = await dbCreateOrder(restaurantId, { table_no: tableNo, payment_method: payment, items });
-    } catch {
-      return null; // keep the cart; caller shows an error and does NOT navigate to success
+    } catch (e) {
+      // keep the cart; surface the server's reason so the UI can say WHY (sold-out item vs closed vs transient)
+      set({ lastPlaceError: e instanceof Error ? e.message : String(e) });
+      return null;
     }
     set({ lastOrder: { no, lines: [...lines], total, ctx }, lines: [] });
     pingShop(restaurantId); // wake the table's other diners' bill view (admin gets it via DB realtime)

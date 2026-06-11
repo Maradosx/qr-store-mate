@@ -195,12 +195,17 @@ export const useShop = create<ShopState>((set, get) => ({
     }
   },
 
-  // customer side: re-pull the public profile (open/closed switch, hours, name/cover) when the
-  // shop channel pings — keeps the menu's open state in sync with what the owner just changed.
+  // customer side: re-pull the public profile (open/closed switch, hours, prices info) when the
+  // shop channel pings or the self-heal poll fires. The fetch is the LIGHT variant (no base64
+  // images — egress), so merge it over the current profile keeping the already-loaded images.
   refreshProfile: async (slug) => {
     try {
       const p = await db.fetchPublicProfile(slug);
-      if (p) set({ profile: p });
+      if (p) {
+        set((s) => ({
+          profile: { ...p, cover: s.profile.cover, logo: s.profile.logo, payQrUrl: s.profile.payQrUrl },
+        }));
+      }
     } catch {
       /* keep current profile on a failed refresh */
     }

@@ -41,7 +41,7 @@ export function CheckoutScreen({ slug, table }: { slug: string; table: string })
   const remove = useCart((s) => s.remove);
   const placeOrder = useCart((s) => s.placeOrder);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState(false);
+  const [err, setErr] = useState<string | null>(null); // display message of the last failure
   const [editLine, setEditLine] = useState<CartLine | null>(null);
   // live open/closed (owner switch + hours) — same hook as the menu; the server also enforces this
   const openState = useOpenState(slug);
@@ -75,16 +75,22 @@ export function CheckoutScreen({ slug, table }: { slug: string; table: string })
   const send = async () => {
     if (busy || !isOpen) return; // guard against double-tap + closed shop (server enforces too)
     setBusy(true);
-    setErr(false);
+    setErr(null);
     const no = await placeOrder(table, ""); // payment deferred to the combined bill
     if (no) {
       router.push(`/r/${slug}/t/${table}/order`);
     } else {
       setBusy(false);
-      // if we just crossed closing time, the server rejected with 'shop closed' — show the closed
-      // notice rather than a misleading "try again"; otherwise it's a real transient failure
-      if (isShopOpen(profile).open) setErr(true);
-      else setJustClosed(true);
+      // surface the REAL reason: closed shop → closed notice; a sold-out/removed item → tell the
+      // customer which action unblocks them (edit/remove); anything else → generic retry
+      const reason = useCart.getState().lastPlaceError ?? "";
+      if (!isShopOpen(profile).open) setJustClosed(true);
+      else if (/item not available|invalid item/i.test(reason)) {
+        setErr(L(
+          "มีเมนูในตะกร้าที่เพิ่งหมดหรือถูกปิดขาย — ลบ/แก้ไขรายการนั้น แล้วกดส่งอีกครั้ง",
+          "An item in your cart just sold out or was removed — delete or edit it, then send again.",
+        ));
+      } else setErr(t("checkout.failed"));
     }
   };
 
@@ -184,7 +190,7 @@ export function CheckoutScreen({ slug, table }: { slug: string; table: string })
         <div className="mx-auto max-w-md px-4 pb-4">
           {err && isOpen && (
             <p className="mb-2 rounded-xl bg-coral/10 px-3 py-2 text-center text-xs font-semibold text-[#b23a1e]">
-              {t("checkout.failed")}
+              {err}
             </p>
           )}
           {!isOpen ? (
