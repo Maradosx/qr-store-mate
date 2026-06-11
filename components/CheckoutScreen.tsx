@@ -90,6 +90,16 @@ export function CheckoutScreen({ slug, table }: { slug: string; table: string })
           "มีเมนูในตะกร้าที่เพิ่งหมดหรือถูกปิดขาย — ลบ/แก้ไขรายการนั้น แล้วกดส่งอีกครั้ง",
           "An item in your cart just sold out or was removed — delete or edit it, then send again.",
         ));
+      } else if (/item changed/i.test(reason)) {
+        setErr(L(
+          "ทางร้านเพิ่งอัปเดตท็อปปิ้งของเมนูในตะกร้า — ลบรายการนั้นแล้วเพิ่มใหม่อีกครั้ง",
+          "The shop just updated this item's add-ons — remove it and add it again.",
+        ));
+      } else if (/table not found/i.test(reason)) {
+        setErr(L(
+          "โต๊ะนี้ไม่มีอยู่ในระบบแล้ว — กรุณาสแกน QR ที่โต๊ะอีกครั้ง หรือแจ้งพนักงาน",
+          "This table no longer exists — please re-scan the table QR or tell the staff.",
+        ));
       } else setErr(t("checkout.failed"));
     }
   };
