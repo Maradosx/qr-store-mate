@@ -72,30 +72,20 @@ Small Thai restaurants run on paper and shouting. Staff sprint between tables an
 
 ## 📸 Screenshots
 
-> **▶️ Try it live (no install, no scan needed):**
-> **[qrstoremate.com/r/khrua-khun-nai/t/1](https://qrstoremate.com/r/khrua-khun-nai/t/1)** — open it on your phone for the real experience.
+> **▶️ Try it live (no install, no scan needed):** [qrstoremate.com/r/khrua-khun-nai/t/1](https://qrstoremate.com/r/khrua-khun-nai/t/1) — open it on your phone for the real experience.
 
-Key screens (all live):
+### 🍳 Kitchen Display — distance-readable tickets, allergy notes broken out, overdue alerts
+![Kitchen Display](public/screenshots/kitchen.png)
 
-| Screen | Open it |
-|---|---|
-| 📱 **Customer menu** — scan-to-order, bilingual | [`/r/khrua-khun-nai/t/1`](https://qrstoremate.com/r/khrua-khun-nai/t/1) |
-| 🧾 **Table bill** — shared bill, PromptPay QR | [`/r/khrua-khun-nai/t/1/bill`](https://qrstoremate.com/r/khrua-khun-nai/t/1/bill) |
-| 🖨️ **Printable brand / sales card** | [`/card`](https://qrstoremate.com/card) |
-| 🍳 Kitchen Display · 🗺️ Floor map · 📊 Dashboard · 🛡️ Platform console | behind owner / super-admin login |
+### 🗺️ Floor map — every table colour-coded by state, live call badges, tap-to-bill
+![Floor map](public/screenshots/floor.png)
 
-<!--
-  📷 To add static screenshots to this README, drop PNGs into public/screenshots/
-  (see public/screenshots/CAPTURE.md for the exact shot list) and uncomment:
+### 🛡️ Platform super-admin console — tenants, MRR, approvals, view-as
+![Platform console](public/screenshots/platform.png)
 
-  | Customer menu (mobile) | Kitchen Display (KDS) | Floor map |
-  |:---:|:---:|:---:|
-  | ![Customer menu](public/screenshots/customer-menu.png) | ![Kitchen display](public/screenshots/kitchen.png) | ![Floor map](public/screenshots/floor.png) |
-
-  | Platform super-admin console | Printable brand / sales card |
-  |:---:|:---:|
-  | ![Platform admin](public/screenshots/platform.png) | ![Brand card](public/screenshots/card.png) |
--->
+| 📱 Customer menu (mobile) | 🖨️ Printable brand / sales card |
+|:---:|:---:|
+| <img src="public/screenshots/customer-menu.png" width="320" alt="Customer menu" /> | <img src="public/screenshots/card.png" width="320" alt="Brand card" /> |
 
 
 ---
