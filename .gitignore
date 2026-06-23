@@ -32,6 +32,12 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# local AI/dev assistant config (not part of the product)
+AGENTS.md
+CLAUDE.md
+.claude/
 
 # vercel
 .vercel
